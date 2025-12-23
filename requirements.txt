@@ -1,0 +1,13 @@
+# Human and Face Detection System
+# Optimized for Orange Pi RV 2 (4GB RAM)
+
+# Core dependencies
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# ONNX Runtime for model inference (CPU only)
+onnxruntime>=1.16.0
+
+# Optional: for converting PyTorch models to ONNX
+# torch>=2.0.0
+# torchvision>=0.15.0
