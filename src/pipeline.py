@@ -11,9 +11,9 @@ from typing import List, Tuple, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
-from detector import PersonDetector, FaceDetector, Detection
-from metrics import MetricsTracker, FrameMetrics
-import config
+from .detector import PersonDetector, FaceDetector, Detection
+from .metrics import MetricsTracker, FrameMetrics
+from . import config
 
 
 class ProcessingPipeline:
@@ -75,27 +75,55 @@ class SequentialPipeline(ProcessingPipeline):
         """Process image: detect persons first, then detect faces in each person crop"""
         frame_start_time = time.time()
         
+        # Get image size
+        img_height, img_width = image.shape[:2]
+        img_size = f"{img_width}x{img_height}"
+        
         # Step 1: Detect persons
+        person_detect_start = time.time()
         person_detections = self.person_detector.detect(image)
+        person_detect_time = (time.time() - person_detect_start) * 1000  # Convert to ms
+        
+        # Save annotated frame with bounding boxes
+        annotated_frame = image.copy()
+        for person_det in person_detections:
+            x1, y1, x2, y2 = person_det.bbox
+            # Draw bbox (red for person)
+            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+            # Draw confidence
+            conf_text = f"{person_det.confidence:.2f}"
+            cv2.putText(annotated_frame, conf_text, (x1, y1-5), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+        
+        # Save annotated frame
+        annotated_path = f"{output_prefix}_annotated.jpg"
+        cv2.imwrite(annotated_path, annotated_frame)
+        
+        # Calculate average confidence for all persons
+        avg_person_conf = sum(p.confidence for p in person_detections) / len(person_detections) if person_detections else 0.0
         
         person_count = 0
         face_count = 0
         
         # Step 2: For each person, detect faces
         for person_idx, person_det in enumerate(person_detections):
-            person_start_time = time.time()
-            
             # Crop person
             person_crop = person_det.get_crop(image)
             if person_crop.size == 0:
                 continue
+            
+            # Get person crop size
+            person_height, person_width = person_crop.shape[:2]
+            person_size = f"{person_width}x{person_height}"
             
             # Save person crop
             person_path = f"{output_prefix}_person_{person_idx}.jpg"
             cv2.imwrite(person_path, person_crop)
             
             # Detect faces in person crop
+            face_detect_start = time.time()
             face_detections = self.face_detector.detect(person_crop)
+            face_detect_time = (time.time() - face_detect_start) * 1000  # Convert to ms
             
             # Save face crops
             for face_idx, face_det in enumerate(face_detections):
@@ -103,28 +131,27 @@ class SequentialPipeline(ProcessingPipeline):
                 if face_crop.size == 0:
                     continue
                 
+                face_height, face_width = face_crop.shape[:2]
+                face_size = f"{face_width}x{face_height}"
+                
                 face_path = f"{output_prefix}_person_{person_idx}_face_{face_idx}.jpg"
                 cv2.imwrite(face_path, face_crop)
-                
-                # Calculate metrics for this face
-                person_time = time.time() - person_start_time
-                frame_time = time.time() - frame_start_time
-                current_fps = 1.0 / frame_time if frame_time > 0 else 0.0
-                
-                # Use confidence as accuracy proxy
-                accuracy = face_det.confidence
-                
-                # Save metrics txt file
-                metrics = FrameMetrics(current_fps, accuracy)
-                metrics_path = face_path.replace('.jpg', '.txt')
-                metrics.save_to_file(metrics_path)
-                
-                # Track metrics
-                self.metrics_tracker.add_frame_metrics(current_fps, accuracy, person_time)
                 
                 face_count += 1
             
             person_count += 1
+        
+        # Calculate total frame time and FPS
+        frame_time = (time.time() - frame_start_time) * 1000  # Convert to ms
+        current_fps = 1000.0 / frame_time if frame_time > 0 else 0.0
+        
+        # Log detailed metrics for this frame
+        print(f"[Frame] Objects: {person_count} persons, {face_count} faces | "
+              f"Time: {frame_time:.1f}ms | Accuracy: {avg_person_conf:.3f} | "
+              f"Size: {img_size} | FPS: {current_fps:.2f}")
+        
+        # Track metrics
+        self.metrics_tracker.add_frame_metrics(current_fps, avg_person_conf, frame_time / 1000.0)
         
         return person_count, face_count
 

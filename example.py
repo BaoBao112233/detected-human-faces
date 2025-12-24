@@ -5,8 +5,8 @@ Example script showing how to use the detection system programmatically
 
 import cv2
 import os
-from pipeline import create_pipeline
-import config
+from src.pipeline import create_pipeline
+from src import config
 
 def example_process_image():
     """Example: Process a single image"""

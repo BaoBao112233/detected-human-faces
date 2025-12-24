@@ -1,52 +1,414 @@
 # Human and Face Detection System
 
-Hệ thống phát hiện người và khuôn mặt được tối ưu hóa cho **Orange Pi RV 2** (4GB RAM).
+[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org)
+[![OpenCV](https://img.shields.io/badge/OpenCV-4.5+-green.svg)](https://opencv.org)
+[![ONNX](https://img.shields.io/badge/ONNX-Runtime-orange.svg)](https://onnxruntime.ai)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## 🌟 Tính năng
+**Optimized for Orange Pi RV 2 (4GB RAM)** - A complete human and face detection system with dual-pipeline processing, comprehensive metrics, and extensive model support.
 
-- ✅ Hỗ trợ đầu vào: **ảnh** hoặc **video**
-- ✅ Tùy chọn model ONNX để sử dụng
-- ✅ **2 pipeline xử lý**:
-  - **Sequential**: Phát hiện người trước → phát hiện khuôn mặt sau
-  - **Parallel**: Phát hiện người và khuôn mặt song song
-- ✅ **Báo cáo hiệu suất chi tiết**:
-  - Thời gian xử lý mỗi người
-  - Thời gian xử lý tổng
-  - FPS cao nhất, thấp nhất, trung bình
-  - Accuracy min, max, avg
-- ✅ Mỗi ảnh crop có file `.txt` đi kèm chứa FPS và Accuracy
-- ✅ Tối ưu hóa cho thiết bị nhúng (RAM thấp)
+---
 
-## 📁 Cấu trúc thư mục
+## 🌟 Key Features
+
+- ✅ **Dual Pipeline Modes**
+  - **Sequential**: Person detection → Face detection (on person crops)
+  - **Parallel**: Person & Face detection simultaneously
+- ✅ **Extensive Model Support**
+  - 13+ ONNX models included
+  - Person detection: NanoDet, RF-DETR, EfficientDet-Lite
+  - Face detection: YuNet, YOLOv8-Face, UltraFace
+- ✅ **Comprehensive Testing Suite**
+  - Automated model testing
+  - Performance benchmarking
+  - Detailed reports with sequence diagrams
+- ✅ **Performance Optimized**
+  - Memory-efficient processing (<1GB)
+  - CPU-only inference (ONNX Runtime)
+  - Quantized models (INT8) support
+- ✅ **Rich Documentation**
+  - User guides with examples
+  - Architecture documentation
+  - Auto-generated test reports
+
+---
+
+## 📁 Project Structure
 
 ```
 detected-human-faces/
-├── config.py           # Cấu hình hệ thống
-├── detector.py         # Các class phát hiện (PersonDetector, FaceDetector)
-├── pipeline.py         # Pipeline xử lý (Sequential, Parallel)
-├── metrics.py          # Theo dõi và tính toán metrics
-├── main.py             # File chính để chạy chương trình
-├── requirements.txt    # Danh sách thư viện cần thiết
-├── models/             # Thư mục chứa các model ONNX
-├── input/              # Thư mục chứa ảnh/video đầu vào
-├── output/             # Thư mục chứa kết quả xử lý
-└── logs/               # Thư mục chứa file báo cáo
+├── src/                      # Source code package
+│   ├── config.py            # Configuration settings
+│   ├── detector.py          # Detection classes
+│   ├── pipeline.py          # Pipeline implementations
+│   └── metrics.py           # Performance tracking
+├── scripts/                  # Utility scripts
+│   ├── download_models.py   # Model downloader
+│   ├── test_all_models.sh   # Complete test suite
+│   ├── analyze_logs.py      # Log analyzer
+│   └── run_complete_test.sh # Master test runner
+├── docs/                     # Documentation
+│   ├── README.md            # Documentation index
+│   ├── USER_GUIDE.md        # User guide
+│   ├── PIPELINE_ARCHITECTURE.md  # Technical docs
+│   └── reports/             # Auto-generated reports
+├── models/                   # ONNX models (13+ models)
+│   ├── NanoDet/
+│   ├── YuNet/
+│   ├── RF-DETR-Nano/
+│   └── ...
+├── input/                    # Input images/videos
+├── output/                   # Detection results
+├── logs/                     # Performance logs
+├── main.py                   # Main entry point
+├── example.py                # Example usage
+└── requirements.txt          # Python dependencies
 ```
 
-## 🚀 Cài đặt
+---
 
-### 1. Yêu cầu hệ thống
+## 🚀 Quick Start
 
-- Orange Pi RV 2 (4GB RAM) hoặc thiết bị tương tự
-- Python 3.8+
-- OpenCV, NumPy, ONNX Runtime
-
-### 2. Cài đặt thư viện
+### 1. Installation
 
 ```bash
+# Clone repository
+git clone <repository-url>
 cd detected-human-faces
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Download models (281MB+)
+python scripts/download_models.py
 ```
+
+### 2. Basic Usage
+
+```bash
+# Process an image
+python main.py --input input/photo.jpg
+
+# Process a video
+python main.py --input input/video.mp4
+
+# Use parallel pipeline for speed
+python main.py --input input/photo.jpg --pipeline parallel
+```
+
+### 3. Test All Models
+
+```bash
+# Run comprehensive test suite
+bash scripts/run_complete_test.sh input/test.png
+```
+
+**This will automatically:**
+- ✅ Test all 19+ model configurations
+- ✅ Generate performance reports
+- ✅ Create sequence diagrams
+- ✅ Analyze and rank models
+- ✅ Save results to `docs/reports/`
+
+---
+
+## 📖 Documentation
+
+| Document | Description |
+|----------|-------------|
+| [User Guide](docs/USER_GUIDE.md) | Complete usage guide with examples |
+| [Pipeline Architecture](docs/PIPELINE_ARCHITECTURE.md) | Technical architecture & design |
+| [Documentation Index](docs/README.md) | All documentation overview |
+| [Model Documentation](models/DOWNLOADED_MODELS.md) | Available models & usage |
+
+---
+
+## 🎯 Usage Examples
+
+### Example 1: Default Configuration
+```bash
+python main.py --input input/photo.jpg
+```
+
+### Example 2: Custom Models
+```bash
+python main.py \
+    --input input/photo.jpg \
+    --person-model models/NanoDet/object_detection_nanodet_2022nov.onnx \
+    --face-model models/YuNet/face_detection_yunet_2023mar.onnx
+```
+
+### Example 3: Optimized for Speed
+```bash
+python main.py \
+    --input input/video.mp4 \
+    --person-model models/NanoDet/object_detection_nanodet_2022nov_int8.onnx \
+    --face-model models/YuNet/face_detection_yunet_2023mar_int8.onnx \
+    --pipeline parallel
+```
+
+### Example 4: High Accuracy Mode
+```bash
+python main.py \
+    --input input/photo.jpg \
+    --person-model models/RF-DETR-Nano/model.onnx \
+    --face-model models/YOLOv8-Face/yolov8n-face.onnx \
+    --pipeline sequential \
+    --person-threshold 0.6 \
+    --face-threshold 0.6
+```
+
+### Example 5: Programmatic Usage
+```python
+from src.pipeline import create_pipeline
+import cv2
+
+# Create pipeline
+pipeline = create_pipeline(
+    pipeline_mode="sequential",
+    person_model_path="models/NanoDet/object_detection_nanodet_2022nov.onnx",
+    face_model_path="models/YuNet/face_detection_yunet_2023mar.onnx"
+)
+
+# Process image
+image = cv2.imread("input/photo.jpg")
+person_count, face_count = pipeline.process_image(image, "output/result")
+
+print(f"Detected {person_count} persons and {face_count} faces")
+```
+
+---
+
+## 🔧 Command Line Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--input`, `-i` | *required* | Input image or video file |
+| `--pipeline`, `-p` | `sequential` | Pipeline mode: `sequential` or `parallel` |
+| `--person-model` | `models/person_detection.onnx` | Person detection model path |
+| `--face-model` | `models/face_detection.onnx` | Face detection model path |
+| `--person-threshold` | `0.5` | Person detection confidence (0-1) |
+| `--face-threshold` | `0.5` | Face detection confidence (0-1) |
+| `--output-dir` | `output/` | Output directory for results |
+
+---
+
+## 📊 Available Models
+
+### Person Detection Models (7 models)
+| Model | Size | Speed | Accuracy | Best For |
+|-------|------|-------|----------|----------|
+| NanoDet-INT8 | 1MB | ⚡⚡⚡⚡ | ⭐⭐ | Real-time |
+| NanoDet-FP32 | 3.6MB | ⚡⚡⚡ | ⭐⭐⭐ | Balanced |
+| NanoDet-Plus | 4.6MB | ⚡⚡⚡ | ⭐⭐⭐ | Enhanced |
+| RF-DETR-INT8 | 27MB | ⚡⚡ | ⭐⭐⭐ | Accurate |
+| RF-DETR-FP32 | 103MB | ⚡ | ⭐⭐⭐⭐ | High accuracy |
+
+### Face Detection Models (6 models)
+| Model | Size | Speed | Accuracy | Best For |
+|-------|------|-------|----------|----------|
+| YuNet-INT8 | 99KB | ⚡⚡⚡⚡ | ⭐⭐ | Ultra-fast |
+| YuNet-FP32 | 228KB | ⚡⚡⚡ | ⭐⭐⭐ | Fast |
+| UltraFace-320 | 1.3MB | ⚡⚡⚡ | ⭐⭐ | Lightweight |
+| YOLOv8-Face | 12MB | ⚡⚡ | ⭐⭐⭐ | Balanced |
+
+See [Model Documentation](models/DOWNLOADED_MODELS.md) for complete list.
+
+---
+
+## 🧪 Testing & Benchmarking
+
+### Run Complete Test Suite
+```bash
+bash scripts/run_complete_test.sh input/test.png
+```
+
+### What Gets Tested
+- ✅ All person detection models
+- ✅ All face detection models  
+- ✅ Both pipeline modes (sequential & parallel)
+- ✅ Performance metrics (FPS, accuracy, time)
+- ✅ Detection counts
+
+### Generated Reports
+- **Summary Report**: Test results table, statistics, top performers
+- **Performance Analysis**: Detailed metrics, comparisons, recommendations
+- **Sequence Diagrams**: Visual flow diagrams (Mermaid format)
+- **CSV Results**: Raw data for further analysis
+
+**Example Output:**
+```
+docs/reports/
+├── test_run_20251224_143052_summary.md
+├── test_run_20251224_143052_performance_analysis.md
+├── test_run_20251224_143052_sequence_diagram.md
+└── test_run_20251224_143052_results.csv
+```
+
+---
+
+## 📈 Performance Metrics
+
+### Typical Performance (Orange Pi RV 2)
+
+| Configuration | FPS | Memory | Use Case |
+|--------------|-----|--------|----------|
+| NanoDet-INT8 + YuNet-INT8 (Parallel) | 5-7 | ~800MB | Real-time |
+| NanoDet + YuNet (Sequential) | 3-5 | ~1GB | Balanced |
+| RF-DETR + YOLOv8 (Sequential) | 1-2 | ~1.5GB | High accuracy |
+
+### Metrics Tracked
+- ⏱️ Processing time per frame/image
+- 📊 FPS (min, max, average)
+- 🎯 Detection accuracy
+- 👥 Person count
+- 👤 Face count
+- 💾 Memory usage
+
+---
+
+## 🎨 Output Files
+
+### Directory Structure
+```
+output/
+├── photo_person_0.jpg          # Cropped person 0
+├── photo_person_1.jpg          # Cropped person 1
+├── photo_face_0_0.jpg          # Face 0 from person 0
+├── photo_face_0_1.jpg          # Face 1 from person 0
+└── photo_annotated.jpg         # Original with boxes
+
+logs/
+└── photo_summary.txt           # Performance metrics
+```
+
+### Example Summary
+```
+PERFORMANCE REPORT
+============================================================
+Total frames processed: 1
+Total processing time: 2.34s
+Average person processing time: 156.78ms
+
+FPS Statistics:
+  Max FPS: 4.56
+  Min FPS: 4.56  
+  Avg FPS: 4.56
+
+Accuracy Statistics:
+  Max Accuracy: 0.8234
+  Min Accuracy: 0.8234
+  Avg Accuracy: 0.8234
+============================================================
+```
+
+---
+
+## 🛠️ Configuration
+
+Edit `src/config.py` to customize:
+
+```python
+# Pipeline mode
+DEFAULT_PIPELINE = "sequential"  # or "parallel"
+
+# Model paths
+PERSON_MODEL_PATH = "models/NanoDet/object_detection_nanodet_2022nov.onnx"
+FACE_MODEL_PATH = "models/YuNet/face_detection_yunet_2023mar.onnx"
+
+# Detection thresholds
+PERSON_CONFIDENCE_THRESHOLD = 0.5
+FACE_CONFIDENCE_THRESHOLD = 0.5
+
+# Performance optimization
+MAX_INPUT_WIDTH = 640
+MAX_INPUT_HEIGHT = 480
+MAX_THREADS = 2
+
+# Output settings
+SAVE_CROPPED_IMAGES = True
+SAVE_ANNOTATED_OUTPUT = True
+SAVE_METRICS_TXT = True
+```
+
+---
+
+## 🔍 Troubleshooting
+
+### Common Issues
+
+**Out of Memory:**
+```bash
+# Use quantized models
+python main.py --input input/photo.jpg \
+    --person-model models/NanoDet/object_detection_nanodet_2022nov_int8.onnx
+```
+
+**Slow Processing:**
+```bash
+# Enable parallel pipeline
+python main.py --input input/photo.jpg --pipeline parallel
+```
+
+**No Detections:**
+```bash
+# Lower thresholds
+python main.py --input input/photo.jpg \
+    --person-threshold 0.3 --face-threshold 0.3
+```
+
+See [User Guide - Troubleshooting](docs/USER_GUIDE.md#troubleshooting) for more solutions.
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see LICENSE file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- **OpenCV Zoo** - Pre-trained models
+- **ONNX Runtime** - Efficient inference
+- **Hugging Face** - Model hosting
+- **Orange Pi Community** - Hardware support
+
+---
+
+## 📧 Support
+
+- 📖 **Documentation**: [docs/](docs/)
+- 🐛 **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/your-repo/discussions)
+
+---
+
+## 🎯 Roadmap
+
+- [ ] Add GPU support (CUDA, OpenCL)
+- [ ] Web interface for easy testing
+- [ ] Docker containerization
+- [ ] More model formats (TensorRT, TFLite)
+- [ ] Real-time video streaming
+- [ ] Face recognition (after detection)
+
+---
+
+**Made with ❤️ for Orange Pi RV 2**
+
+*Last Updated: December 24, 2025*
 
 ### 3. Chuẩn bị models
 

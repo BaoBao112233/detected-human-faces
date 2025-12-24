@@ -71,11 +71,21 @@ class PersonDetector(BaseDetector):
             return self._detect_hog(image)
     
     def _detect_onnx(self, image: np.ndarray) -> List[Detection]:
-        """Detect using ONNX model (e.g., YOLO format)"""
+        """Detect using ONNX model (supports NanoDet, YOLO, etc.)"""
         detections = []
         try:
+            # Get input shape from model
+            input_shape = self.model.get_inputs()[0].shape
+            # Handle dynamic dimensions (e.g., ['batch', 3, 416, 416] or [1, 3, 416, 416])
+            if len(input_shape) >= 4:
+                input_height = input_shape[2] if isinstance(input_shape[2], int) else 416
+                input_width = input_shape[3] if isinstance(input_shape[3], int) else 416
+            else:
+                input_height, input_width = 416, 416
+            
+            input_size = (input_width, input_height)
+            
             # Preprocess image
-            input_size = (640, 640)
             img_resized = cv2.resize(image, input_size)
             img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
             img_normalized = img_rgb.astype(np.float32) / 255.0
@@ -86,33 +96,129 @@ class PersonDetector(BaseDetector):
             input_name = self.model.get_inputs()[0].name
             outputs = self.model.run(None, {input_name: img_batch})
             
-            # Post-process (YOLO format)
-            predictions = outputs[0][0]
-            
             h, w = image.shape[:2]
             scale_x = w / input_size[0]
             scale_y = h / input_size[1]
             
-            for pred in predictions:
-                confidence = pred[4]
-                if confidence >= self.confidence_threshold:
-                    # Convert from center format to corner format
-                    cx, cy, bw, bh = pred[0:4]
-                    x1 = int((cx - bw/2) * scale_x)
-                    y1 = int((cy - bh/2) * scale_y)
-                    x2 = int((cx + bw/2) * scale_x)
-                    y2 = int((cy + bh/2) * scale_y)
-                    
-                    # Clamp to image boundaries
-                    x1 = max(0, min(x1, w))
-                    y1 = max(0, min(y1, h))
-                    x2 = max(0, min(x2, w))
-                    y2 = max(0, min(y2, h))
-                    
-                    detections.append(Detection((x1, y1, x2, y2), float(confidence)))
-        
+            # Detect model type by output structure
+            if len(outputs) == 6 and outputs[0].shape[-1] == 80:
+                # NanoDet format: 6 outputs (3 cls + 3 bbox)
+                # outputs[0,1,2]: class scores for 3 scales
+                # outputs[3,4,5]: bbox predictions for 3 scales
+                detections = self._parse_nanodet_output(outputs, scale_x, scale_y, w, h)
+            else:
+                # Try YOLO-style format
+                detections = self._parse_yolo_output(outputs, scale_x, scale_y, w, h)
+                
         except Exception as e:
             print(f"ONNX detection error: {e}")
+            
+        return detections
+    
+    def _parse_nanodet_output(self, outputs, scale_x, scale_y, img_w, img_h):
+        """Parse NanoDet model output (COCO 80 classes)"""
+        detections = []
+        
+        # NanoDet outputs: [cls_0, cls_1, cls_2, bbox_0, bbox_1, bbox_2]
+        # Person class in COCO is index 0
+        person_class_id = 0
+        
+        # Process each scale
+        for scale_idx in range(3):
+            cls_pred = outputs[scale_idx][0]  # Shape: [num_anchors, 80]
+            bbox_pred = outputs[scale_idx + 3][0]  # Shape: [num_anchors, 32]
+            
+            # Get stride for this scale
+            num_anchors = cls_pred.shape[0]
+            if num_anchors == 2704:  # 52x52 = 2704
+                stride = 8
+                grid_h, grid_w = 52, 52
+            elif num_anchors == 676:  # 26x26 = 676  
+                stride = 16
+                grid_h, grid_w = 26, 26
+            elif num_anchors == 169:  # 13x13 = 169
+                stride = 32
+                grid_h, grid_w = 13, 13
+            else:
+                continue
+            
+            # Process each anchor
+            for idx in range(num_anchors):
+                # Get person class score
+                person_score = cls_pred[idx, person_class_id]
+                
+                if person_score >= self.confidence_threshold:
+                    # Calculate grid position
+                    grid_y = idx // grid_w
+                    grid_x = idx % grid_w
+                    
+                    # Decode bbox using DFL (Distribution Focal Loss)
+                    # bbox_pred shape: [32] = [8 bins for each of 4 distances: left, top, right, bottom]
+                    reg_max = 7  # NanoDet uses reg_max=7 (8 bins: 0-7)
+                    
+                    # Softmax over bins for each distance
+                    bbox_dist = bbox_pred[idx].reshape(4, 8)  # [4 directions, 8 bins]
+                    
+                    # Apply softmax to get distribution
+                    bbox_dist_exp = np.exp(bbox_dist - np.max(bbox_dist, axis=1, keepdims=True))
+                    bbox_dist_softmax = bbox_dist_exp / np.sum(bbox_dist_exp, axis=1, keepdims=True)
+                    
+                    # Calculate expected value (weighted sum)
+                    bin_range = np.arange(8).astype(np.float32)
+                    distances = np.sum(bbox_dist_softmax * bin_range, axis=1)  # [left, top, right, bottom]
+                    
+                    # Anchor center in original 416x416 space
+                    cx = (grid_x + 0.5) * stride
+                    cy = (grid_y + 0.5) * stride
+                    
+                    # Decode bbox (distances are in stride units)
+                    x1 = cx - distances[0] * stride
+                    y1 = cy - distances[1] * stride
+                    x2 = cx + distances[2] * stride
+                    y2 = cy + distances[3] * stride
+                    
+                    # Scale to original image size
+                    x1 = int(x1 * scale_x)
+                    y1 = int(y1 * scale_y)
+                    x2 = int(x2 * scale_x)
+                    y2 = int(y2 * scale_y)
+                    
+                    # Clamp to image boundaries
+                    x1 = max(0, min(x1, img_w))
+                    y1 = max(0, min(y1, img_h))
+                    x2 = max(0, min(x2, img_w))
+                    y2 = max(0, min(y2, img_h))
+                    
+                    if x2 > x1 and y2 > y1:
+                        detections.append(Detection((x1, y1, x2, y2), float(person_score)))
+        
+        return detections
+    
+    def _parse_yolo_output(self, outputs, scale_x, scale_y, img_w, img_h):
+        """Parse YOLO-style model output"""
+        detections = []
+        
+        # Post-process (YOLO format)
+        predictions = outputs[0][0]
+        
+        for pred in predictions:
+            confidence = pred[4]
+            if confidence >= self.confidence_threshold:
+                # Convert from center format to corner format
+                cx, cy, bw, bh = pred[0:4]
+                x1 = int((cx - bw/2) * scale_x)
+                y1 = int((cy - bh/2) * scale_y)
+                x2 = int((cx + bw/2) * scale_x)
+                y2 = int((cy + bh/2) * scale_y)
+                
+                # Clamp to image boundaries
+                x1 = max(0, min(x1, img_w))
+                y1 = max(0, min(y1, img_h))
+                x2 = max(0, min(x2, img_w))
+                y2 = max(0, min(y2, img_h))
+                
+                if x2 > x1 and y2 > y1:
+                    detections.append(Detection((x1, y1, x2, y2), float(confidence)))
         
         return detections
     
@@ -172,8 +278,18 @@ class FaceDetector(BaseDetector):
         """Detect using ONNX model"""
         detections = []
         try:
+            # Get input shape from model
+            input_shape = self.model.get_inputs()[0].shape
+            # Handle dynamic dimensions
+            if len(input_shape) >= 4:
+                input_height = input_shape[2] if isinstance(input_shape[2], int) else 320
+                input_width = input_shape[3] if isinstance(input_shape[3], int) else 320
+            else:
+                input_height, input_width = 320, 320
+            
+            input_size = (input_width, input_height)
+            
             # Preprocess
-            input_size = (320, 320)
             img_resized = cv2.resize(image, input_size)
             img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
             img_normalized = img_rgb.astype(np.float32) / 255.0

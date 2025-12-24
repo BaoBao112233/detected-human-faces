@@ -16,8 +16,8 @@ from pathlib import Path
 
 import cv2
 
-import config
-from pipeline import create_pipeline
+from src import config
+from src.pipeline import create_pipeline
 
 
 def parse_arguments():
