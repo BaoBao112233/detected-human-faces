@@ -14,7 +14,7 @@ from src.detector import PersonDetector, FaceDetector
 from src.metrics import MetricsTracker
 
 
-def analyze_video_detailed(video_path: str, output_dir: str):
+def analyze_video_detailed(video_path: str, output_dir: str, max_frames: int = None):
     """Phân tích video và hiển thị thông số chi tiết từng frame"""
     
     # Kiểm tra video tồn tại
@@ -197,6 +197,11 @@ def analyze_video_detailed(video_path: str, output_dir: str):
         metrics_tracker.add_frame_metrics(current_fps, avg_person_conf, frame_time / 1000.0)
         
         frame_idx += 1
+        
+        # Kiểm tra max_frames nếu được set
+        if max_frames is not None and frame_idx >= max_frames:
+            print(f"\n⚠️  Đã xử lý đủ {max_frames} frames, dừng lại...")
+            break
     
     cap.release()
     metrics_tracker.end_processing()
@@ -237,10 +242,11 @@ def main():
     parser = argparse.ArgumentParser(description='Phân tích chi tiết video')
     parser.add_argument('--input', '-i', type=str, required=True, help='Đường dẫn video')
     parser.add_argument('--output', '-o', type=str, default='output/analysis', help='Thư mục output')
+    parser.add_argument('--max-frames', '-m', type=int, default=None, help='Số frame tối đa để test (None = full video)')
     
     args = parser.parse_args()
     
-    analyze_video_detailed(args.input, args.output)
+    analyze_video_detailed(args.input, args.output, args.max_frames)
 
 
 if __name__ == '__main__':
